@@ -1,37 +1,36 @@
 #include <Windows.h>
 #include <stdio.h>
 
+#define DRIVER_FUNC 0x01
+
+#define IOCTL_XXX \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, DRIVER_FUNC, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 typedef struct _PROCESS_IMAGE_PATH_ENTRY {
   DWORD nextOffset;  // if 0, current is the last entry.
   WCHAR path[ANYSIZE_ARRAY];
 } PROCESS_IMAGE_PATH_ENTRY, *PPROCESS_IMAGE_PATH_ENTRY;
 
-PPROCESS_IMAGE_PATH_ENTRY InitProcessImagePathEntries(LPCWSTR pathList[],
-                                                      DWORD numberOfEntries) {
+PPROCESS_IMAGE_PATH_ENTRY InitializeProcessImagePathEntries(
+    LPCWSTR pathList[],
+    DWORD numberOfEntries) {
   if (numberOfEntries == 0) {
     return NULL;
   }
 
   size_t totalSize = 0;
-  PDWORD nextOffsets = (PDWORD)malloc(numberOfEntries * sizeof(DWORD));
-
-  if (!nextOffsets) {
-    return NULL;
-  }
-
-  ZeroMemory(nextOffsets, numberOfEntries * sizeof(DWORD));
-
   for (DWORD i = 0; i < numberOfEntries; i++) {
-    nextOffsets[i] = (wcslen(pathList[i]) + 1) * sizeof(WCHAR) +
-                     sizeof(PROCESS_IMAGE_PATH_ENTRY) - sizeof(WCHAR);
-    totalSize += nextOffsets[i];
+    /*
+     * The FIELD_OFFSET macro is useful when calculating size of a structure
+     * that contain a variadic string.
+     */
+    totalSize +=
+        FIELD_OFFSET(PROCESS_IMAGE_PATH_ENTRY, path[wcslen(pathList[i]) + 1]);
   }
 
   PPROCESS_IMAGE_PATH_ENTRY baseEntry =
       (PPROCESS_IMAGE_PATH_ENTRY)malloc(totalSize);
-
-  if (!baseEntry) {
-    free(nextOffsets);
+  if (baseEntry == NULL) {
     return NULL;
   }
 
@@ -40,16 +39,24 @@ PPROCESS_IMAGE_PATH_ENTRY InitProcessImagePathEntries(LPCWSTR pathList[],
   ZeroMemory(entries, totalSize);
 
   for (DWORD i = 0; i < numberOfEntries; i++) {
-    entries->nextOffset = (i + 1 >= numberOfEntries) ? 0 : nextOffsets[i];
+    entries->nextOffset = (i + 1 >= numberOfEntries)
+                              ? 0
+                              : FIELD_OFFSET(PROCESS_IMAGE_PATH_ENTRY,
+                                             path[wcslen(pathList[i]) + 1]);
     memcpy(entries->path, pathList[i],
            (wcslen(pathList[i]) + 1) * sizeof(WCHAR));
 
     entries = (PPROCESS_IMAGE_PATH_ENTRY)((PBYTE)entries + entries->nextOffset);
   }
 
-  free(nextOffsets);
-
   return baseEntry;
+}
+
+void FinalizeProcessImagePathEntries(PPROCESS_IMAGE_PATH_ENTRY entries) {
+  free(entries);
+  entries = NULL;
+
+  return;
 }
 
 int main() {
@@ -63,9 +70,9 @@ int main() {
       L"C:\\Windows\\SysWOW64\\calc.exe",
   };
 
-  PPROCESS_IMAGE_PATH_ENTRY baseEntry = InitProcessImagePathEntries(
+  PPROCESS_IMAGE_PATH_ENTRY baseEntry = InitializeProcessImagePathEntries(
       imagePathList, sizeof(imagePathList) / sizeof(LPCWSTR));
-  if (!baseEntry) {
+  if (baseEntry == NULL) {
     return 1;
   }
 
@@ -81,7 +88,7 @@ int main() {
     entries = (PPROCESS_IMAGE_PATH_ENTRY)((PBYTE)entries + entries->nextOffset);
   }
 
-  free(baseEntry);
+  FinalizeProcessImagePathEntries(baseEntry);
 
   return 0;
 }
