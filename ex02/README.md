@@ -29,4 +29,4 @@ Register a new service and then start.
 
 ![](../images/ex02/output.png)
 
-If
+The driver prints the list of process image path. It means an user application sends the list to our driver successfully.
