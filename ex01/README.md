@@ -8,11 +8,9 @@ Print the string "Hello, world!". That's it!
 
 ```
 # sc create ex01 binpath= "%USERPROFILE%\Desktop\hello_world.sys" displayname= "ex01" start= demand type= kernel
-[SC] CreateService SUCCESS
-
+```
+```
 # sc start ex01
-[SC] StartService FAILED 31
-A device attached to the system is not functioning.
 ```
 
 Register a new service and then start.
